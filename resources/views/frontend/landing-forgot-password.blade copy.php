@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Forgot Password</title>
+    <title>Forgot Password No Resend Code</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <!-- Tailwind CSS CDN for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -103,13 +103,6 @@
                         Verify OTP
                     </button>
                 </form>
-                <div class="text-center mt-4">
-                    <p id="otp-timer" class="text-sm text-gray-500 mb-2">Resend OTP in 60 seconds</p>
-                    <button id="resend-otp-button" disabled
-                            class="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition ease-in-out duration-150">
-                        Didn't get OTP? Resend OTP
-                    </button>
-                </div>
             </div>
 
             <!-- Thank you message, shown for 'contact authority' option -->
@@ -150,10 +143,6 @@
     <script>
         // Global variable to store user data after finding account
         let currentUser = null;
-        let currentOtpSendTo = ''; // Stores the email or phone where OTP was sent
-        let currentOtpType = 'password-recovery'; // Stores the type of OTP (fixed for this flow)
-        let timerIntervalId = null; // Stores the interval ID for the OTP timer
-        const OTP_COOLDOWN_SECONDS = 60; // Cooldown duration for OTP resend
 
         // DOM element references for easier access
         const step1 = document.getElementById('step-1');
@@ -181,9 +170,6 @@
         const resetPasswordForm = document.getElementById('reset-password-form');
         const newPasswordInput = document.getElementById('new-password');
         const confirmPasswordInput = document.getElementById('confirm-password');
-
-        const otpTimerElem = document.getElementById('otp-timer');
-        const resendOtpButton = document.getElementById('resend-otp-button');
 
         const customAlertModal = document.getElementById('custom-alert-modal');
         const customAlertMessage = document.getElementById('custom-alert-message');
@@ -276,93 +262,7 @@
             showStep('step-1');
             emailOrPhoneInput.value = '';
             currentUser = null; // Clear any stored user data
-            clearOtpTimer(); // Clear timer if navigating back from OTP step
         }
-
-        /**
-         * Starts the OTP resend cooldown timer.
-         * @param {number} duration - The duration of the cooldown in seconds.
-         */
-        function startOtpTimer(duration) {
-            clearOtpTimer(); // Clear any existing timer first
-            resendOtpButton.disabled = true;
-            let secondsRemaining = duration;
-
-            otpTimerElem.textContent = `Resend OTP in ${secondsRemaining} seconds`;
-
-            timerIntervalId = setInterval(() => {
-                secondsRemaining--;
-                if (secondsRemaining > 0) {
-                    otpTimerElem.textContent = `Resend OTP in ${secondsRemaining} seconds`;
-                } else {
-                    clearOtpTimer();
-                    resendOtpButton.disabled = false;
-                    otpTimerElem.textContent = "Didn't get OTP?";
-                }
-            }, 1000);
-        }
-
-        /**
-         * Clears the OTP resend timer.
-         */
-        function clearOtpTimer() {
-            if (timerIntervalId) {
-                clearInterval(timerIntervalId);
-                timerIntervalId = null;
-            }
-        }
-
-        /**
-         * Generic function to send an OTP, used by both initial send and resend.
-         * @param {string} method - 'email' or 'phone'.
-         * @param {string} recipient - The email or phone number.
-         */
-        async function triggerOtpSend(method, recipient) {
-            let apiUrl = '';
-            let requestBody = {};
-
-            if (method === 'email') {
-                apiUrl = '/send-otp-email';
-                requestBody = { email: recipient, userId: currentUser.id };
-            } else if (method === 'phone') {
-                apiUrl = '/send-otp-phone';
-                requestBody = { phone: recipient, userId: currentUser.id };
-            } else {
-                showCustomAlert("Invalid OTP sending method specified.");
-                return false;
-            }
-
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                    },
-                    body: JSON.stringify(requestBody)
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json(); // Attempt to parse error message
-                    throw new Error(errorData.message || `Server responded with status: ${response.status}`);
-                }
-
-                const data = await response.json();
-
-                if (data.result || data.success) { // Assuming result for email, success for phone
-                    startOtpTimer(OTP_COOLDOWN_SECONDS);
-                    return true;
-                } else {
-                    showCustomAlert(data.message || `Failed to send OTP. Please try again.`);
-                    return false;
-                }
-            } catch (error) {
-                console.error('Error sending OTP:', error);
-                showCustomAlert(`An error occurred while sending the OTP: ${error.message}. Please try again.`);
-                return false;
-            }
-        }
-
 
         // --- Event Listeners ---
 
@@ -380,31 +280,34 @@
             }
 
             try {
+                // Simulate API call to check if a user exists
                 const response = await fetch('/check-user', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content') // CSRF token for Laravel
                     },
                     body: JSON.stringify({ email_or_phone: email_or_phone })
                 });
 
                 if (!response.ok) {
+                    // Handle non-2xx HTTP responses (e.g., 404, 500)
                     throw new Error(`Server responded with status: ${response.status}`);
                 }
 
-                const data = await response.json();
+                const data = await response.json(); // Parse the JSON response
 
-                showStep('step-2');
+                showStep('step-2'); // Move to step 2 to show user found/not found
 
                 if (data.result === true && data.code === 200 && data.data) {
-                    currentUser = data.data;
+                    currentUser = data.data; // Store the user data
                     userFoundDiv.classList.remove('hidden');
                     userNotFoundDiv.classList.add('hidden');
 
                     userNameElem.textContent = currentUser.name;
                     userMessageElem.textContent = `${currentUser.name}, is this you?`;
 
+                    // Update recovery options with masked contact details
                     const emailLabelSpan = emailOptionDiv.querySelector('span');
                     const phoneLabelSpan = phoneOptionDiv.querySelector('span');
 
@@ -424,14 +327,15 @@
                         phoneLabelSpan.textContent = '';
                     }
                 } else {
+                    // If user not found or API returns an error
                     userFoundDiv.classList.add('hidden');
                     userNotFoundDiv.classList.remove('hidden');
-                    currentUser = null;
+                    currentUser = null; // Clear user data
                 }
             } catch (error) {
                 console.error('Error finding account:', error);
                 showCustomAlert("An error occurred while trying to find your account. Please check your input and try again.");
-                showStep('step-1');
+                showStep('step-1'); // Go back to step 1 on a critical error
             }
         });
 
@@ -448,22 +352,40 @@
             const option = selectedOption.value;
             showStep('step-3'); // Transition to step 3 immediately
 
-            let otpSent = false;
-
             if (option === 'email') {
-
                 if (!currentUser || !currentUser.email) {
                     showCustomAlert("Email recovery is not available for this account.");
                     goBack();
                     return;
                 }
                 otpMessageElem.textContent = `An OTP has been sent to your registered email ${maskEmail(currentUser.email)}. Please enter it below to proceed.`;
-                otpInputSection.classList.remove('hidden');
+                otpInputSection.classList.remove('hidden'); // Show OTP input
 
-                // Explicitly set global context variables
-                currentOtpSendTo = currentUser.email;
-                currentOtpType = 'email';
-                otpSent = await triggerOtpSend(currentOtpType, currentOtpSendTo);
+                try {
+                    // Simulate API call to send OTP via email
+                    const response = await fetch('/send-otp-email', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        },
+                        body: JSON.stringify({ email: currentUser.email, userId: currentUser.id })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Server responded with status: ${response.status}`);
+                    }
+                    const data = await response.json();
+
+                    if (!data.result) {
+                        showCustomAlert("Failed to send OTP to email. Please try again.");
+                        goBack(); // Return to start if OTP sending failed
+                    }
+                } catch (error) {
+                    console.error('Error sending OTP to email:', error);
+                    showCustomAlert("An error occurred while sending the OTP to your email. Please try again.");
+                    goBack();
+                }
 
             } else if (option === 'phone') {
                 if (!currentUser || !currentUser.phone) {
@@ -472,35 +394,39 @@
                     return;
                 }
                 otpMessageElem.textContent = `An OTP has been sent to your registered phone ${maskPhone(currentUser.phone)}. Please enter it below to proceed.`;
-                otpInputSection.classList.remove('hidden');
+                otpInputSection.classList.remove('hidden'); // Show OTP input
 
-                // Explicitly set global context variables
-                currentOtpSendTo = currentUser.phone;
-                currentOtpType = 'phone';
-                otpSent = await triggerOtpSend(currentOtpType, currentOtpSendTo);
+                try {
+                    // Simulate API call to send OTP via phone
+                    const response = await fetch('/send-otp-phone', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                        },
+                        body: JSON.stringify({ phone: currentUser.phone, userId: currentUser.id })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Server responded with status: ${response.status}`);
+                    }
+                    const data = await response.json();
+
+                    if (!data.result) { // Assuming 'success' property for phone OTP response
+                        showCustomAlert("Failed to send OTP to phone. Please try again.");
+                        goBack();
+                    }
+                } catch (error) {
+                    console.error('Error sending OTP to phone:', error);
+                    showCustomAlert("An error occurred while sending the OTP to your phone. Please try again.");
+                    goBack();
+                }
 
             } else if (option === 'login') {
-                window.location.href = '/login';
-                return; // Stop execution
+                window.location.href = '/login'; // Redirect to login page
             } else if (option === 'contact') {
-                otpMessageElem.textContent = "";
-                thankYouMessageDiv.classList.remove('hidden');
-                return; // Stop execution
-            }
-
-            if (!otpSent) {
-                goBack(); // If OTP failed to send, go back to step 1
-            }
-        });
-
-        // Handle resend OTP button click
-        resendOtpButton.addEventListener('click', async function() {
-            if (!resendOtpButton.disabled) { // Double check if enabled
-                otpInput.value = ''; // Reset OTP input field
-                const otpSent = await triggerOtpSend(currentOtpType, currentOtpSendTo);
-                if (otpSent) {
-                    showCustomAlert(`A new OTP has been sent to your ${currentOtpType}.`);
-                }
+                otpMessageElem.textContent = ""; // Clear any OTP message
+                thankYouMessageDiv.classList.remove('hidden'); // Show the 'thank you' message
             }
         });
 
@@ -514,49 +440,48 @@
                 return;
             }
 
-            // Ensure currentOtpSendTo and currentOtpType are set from previous steps
-            if (!currentOtpSendTo || !currentOtpType) {
-                showCustomAlert("OTP context missing. Please restart the process.");
-                goBack();
+            let selectedSendTo = '';
+            let otpPurposeType = 'password-recovery'; // Define the type
+
+            // This part assumes you know whether the OTP was sent to email or phone
+            // based on the user's previous selection in Step 2.
+            // You might need a global variable or store it in localStorage/sessionStorage.
+            if (currentUser && currentUser.email && document.querySelector('input[name="recovery"][value="email"]:checked')) {
+                selectedSendTo = currentUser.email;
+            } else if (currentUser && currentUser.phone && document.querySelector('input[name="recovery"][value="phone"]:checked')) {
+                selectedSendTo = currentUser.phone;
+            } else {
+                // Fallback or error if send_to can't be determined
+                showCustomAlert("Could not determine where the OTP was sent. Please restart the process.");
                 return;
             }
 
             try {
+                // Simulate API call to verify the entered OTP
                 const response = await fetch('/verify-reset-password-otp', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                     },
-                    body: JSON.stringify({
-                        otp: otp,
-                        send_to: currentOtpSendTo,
-                        type: currentOtpType
-                    })
+                    body: JSON.stringify({ 
+                      otp: otp,
+                      send_to: selectedSendTo, // Send the email or phone number
+                      type: otpPurposeType     // Send the OTP type
+                     })
                 });
-                console.log(response);
+
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    if (response.status === 422 && errorData.errors) {
-                        let errorMessage = 'Validation failed:';
-                        for (const field in errorData.errors) {
-                            errorMessage += `\n- ${errorData.errors[field].join(', ')}`;
-                        }
-                        showCustomAlert(errorMessage);
-                    } else {
-                        throw new Error(`Server responded with status: ${response.status}. Message: ${errorData.message || 'Unknown error.'}`);
-                    }
-                    return;
+                    throw new Error(`Server responded with status: ${response.status}`);
                 }
                 const data = await response.json();
-                console.log(data);
-                if (data.result === true) {
-                    clearOtpTimer();
-                    otpInputSection.classList.add('hidden');
+
+                if (data.result === true) { // Assuming 'result' indicates successful OTP verification
+                    otpInputSection.classList.add('hidden'); // Hide OTP input section
                     otpMessageElem.textContent = "OTP verified successfully! Please set your new password below.";
-                    resetPasswordSection.classList.remove('hidden');
+                    resetPasswordSection.classList.remove('hidden'); // Show the reset password form
                 } else {
-                    showCustomAlert(data.message || "The OTP you entered is invalid or expired. Please check and try again.");
+                    showCustomAlert("The OTP you entered is invalid. Please check and try again.");
                 }
             } catch (error) {
                 console.error('Error verifying OTP:', error);
@@ -574,18 +499,13 @@
                 showCustomAlert("New password and confirm password do not match.");
                 return;
             }
-            if (newPassword.length < 6) {
+            if (newPassword.length < 6) { // Example: enforce minimum password length
                 showCustomAlert("Your new password must be at least 6 characters long.");
                 return;
             }
 
-            if (!currentUser || !currentUser.id) {
-                showCustomAlert("User information is missing. Please restart the password reset process.");
-                goBack();
-                return;
-            }
-
             try {
+                // Simulate API call to reset the user's password
                 const response = await fetch('/reset-password', {
                     method: 'POST',
                     headers: {
@@ -593,32 +513,23 @@
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
                     },
                     body: JSON.stringify({
-                        userId: currentUser.id,
-                        new_password: newPassword,
-                        confirm_password: confirmPassword
-                    })
+                      userId: currentUser.id, // <--- IMPORTANT: Send the user ID here
+                      new_password: newPassword,
+                      confirm_password: confirmPassword
+                     })
                 });
 
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    if (response.status === 422 && errorData.errors) {
-                        let errorMessage = 'Validation failed:';
-                        for (const field in errorData.errors) {
-                            errorMessage += `\n- ${errorData.errors[field].join(', ')}`;
-                        }
-                        showCustomAlert(errorMessage);
-                    } else {
-                        throw new Error(`Server responded with status: ${response.status}. Message: ${errorData.message || 'Unknown error.'}`);
-                    }
-                    return;
+                    throw new Error(`Server responded with status: ${response.status}`);
                 }
                 const data = await response.json();
 
-                if (data.result === true) {
+                if (data.result === true) { // Assuming 'result' indicates successful password reset
                     showCustomAlert("Your password has been successfully reset! You will now be redirected to the login page.");
+                    // Redirect to login page after a short delay
                     setTimeout(() => window.location.href = '/landing-login', 2000);
                 } else {
-                    showCustomAlert(data.message || "Failed to reset your password. Please try again.");
+                    showCustomAlert("Failed to reset your password. Please try again.");
                 }
             } catch (error) {
                 console.error('Error resetting password:', error);
