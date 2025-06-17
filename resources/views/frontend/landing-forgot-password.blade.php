@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Forgot Password With Resend</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <!-- Tailwind CSS CDN for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Custom font for Inter */
@@ -17,11 +16,9 @@
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
 
-    <!-- Main container for the form, centered and responsive -->
     <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
-        <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">Forgot Password With Resend</h2>
+        <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">Forgot Password With Resend and locked steps</h2>
 
-        <!-- Step 1: Find Account -->
         <div id="step-1">
             <form id="find-account-form" class="space-y-4">
                 <input type="text" id="email_or_phone" name="email_or_phone" placeholder="Enter your email or phone" required
@@ -33,38 +30,32 @@
             </form>
         </div>
 
-        <!-- Step 2: Recovery Options -->
         <div id="step-2" class="hidden">
             <div id="user-found" class="hidden">
                 <div class="flex flex-col items-center mb-4">
-                    <!-- Placeholder for user image if needed: <img id="user-image" src="https://placehold.co/100x100/A3A3A3/FFFFFF?text=User" alt="User Image" class="rounded-full mb-2"> -->
                     <p id="user-name" class="text-lg font-semibold text-gray-900"></p>
                     <p id="user-message" class="text-gray-600 text-center"></p>
                 </div>
 
                 <form id="recovery-options" class="space-y-3">
-                    <!-- Email recovery option, hidden if email is not available -->
                     <div id="email-option" class="option hidden flex items-center p-3 border border-gray-200 rounded-md">
                         <label class="flex items-center w-full cursor-pointer">
                             <input type="radio" name="recovery" value="email" class="form-radio h-4 w-4 text-blue-600">
                             <span class="ml-2 text-gray-700"></span>
                         </label>
                     </div>
-                    <!-- Phone recovery option, hidden if phone is not available -->
                     <div id="phone-option" class="option hidden flex items-center p-3 border border-gray-200 rounded-md">
                         <label class="flex items-center w-full cursor-pointer">
                             <input type="radio" name="recovery" value="phone" class="form-radio h-4 w-4 text-blue-600">
                             <span class="ml-2 text-gray-700"></span>
                         </label>
                     </div>
-                    <!-- Login with password option -->
                     <div class="option flex items-center p-3 border border-gray-200 rounded-md">
                         <label class="flex items-center w-full cursor-pointer">
                             <input type="radio" name="recovery" value="login" class="form-radio h-4 w-4 text-blue-600">
                             <span class="ml-2 text-gray-700">Login with Password</span>
                         </label>
                     </div>
-                    <!-- Contact authority option -->
                     <div class="option flex items-center p-3 border border-gray-200 rounded-md">
                         <label class="flex items-center w-full cursor-pointer">
                             <input type="radio" name="recovery" value="contact" class="form-radio h-4 w-4 text-blue-600">
@@ -79,7 +70,6 @@
                 </form>
             </div>
 
-            <!-- Message if user account is not found -->
             <div id="user-not-found" class="hidden text-center mt-6">
                 <p class="text-red-600 mb-4">No user found with given credentials.</p>
                 <button onclick="goBack()"
@@ -89,11 +79,9 @@
             </div>
         </div>
 
-        <!-- Step 3: OTP and Reset Password / Thank You Message -->
         <div id="step-3" class="hidden">
             <p id="otp-message" class="text-gray-700 mb-4 text-center"></p>
 
-            <!-- OTP input section, shown for email/phone recovery -->
             <div id="otp-input-section" class="hidden">
                 <form id="otpForm" class="space-y-4">
                     <input type="text" id="otp" name="otp" placeholder="Enter OTP" required
@@ -112,7 +100,6 @@
                 </div>
             </div>
 
-            <!-- Thank you message, shown for 'contact authority' option -->
             <div id="thank-you-message" class="hidden text-center mt-6">
                 <p class="text-green-600 text-lg font-semibold">Thanks! We will be in touch very soon.</p>
                 <button onclick="goBack()"
@@ -121,7 +108,6 @@
                 </button>
             </div>
 
-            <!-- Reset password section, shown after successful OTP verification -->
             <div id="reset-password-section" class="hidden">
                 <form id="reset-password-form" class="space-y-4">
                     <input type="password" id="new-password" placeholder="New Password" required
@@ -136,10 +122,9 @@
             </div>
         </div>
 
-        <a href="/landing" class="block text-center text-blue-600 hover:underline mt-6">Back to Home</a>
+        <a href="/landing" id="back-to-home-link" class="block text-center text-blue-600 hover:underline mt-6">Back to Home</a>
     </div>
 
-    <!-- Custom Alert Modal: Replaces default alert() for better UX -->
     <div id="custom-alert-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden z-50">
         <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-sm text-center">
             <p id="custom-alert-message" class="text-gray-800 text-lg mb-4"></p>
@@ -154,6 +139,7 @@
         let currentOtpType = 'password-recovery'; // Stores the type of OTP (fixed for this flow)
         let timerIntervalId = null; // Stores the interval ID for the OTP timer
         const OTP_COOLDOWN_SECONDS = 3; // Cooldown duration for OTP resend
+        let isInProgress = false; // New flag to track if the process is active
 
         // DOM element references for easier access
         const step1 = document.getElementById('step-1');
@@ -188,6 +174,8 @@
         const customAlertModal = document.getElementById('custom-alert-modal');
         const customAlertMessage = document.getElementById('custom-alert-message');
         const customAlertOkButton = document.getElementById('custom-alert-ok-button');
+        const backToHomeLink = document.getElementById('back-to-home-link');
+
 
         /**
          * Masks an email address for display (e.g., "ex**@d***.com").
@@ -246,6 +234,13 @@
             step2.classList.add('hidden');
             step3.classList.add('hidden');
 
+            // Set isInProgress flag
+            if (stepId === 'step-1') {
+                isInProgress = false;
+            } else {
+                isInProgress = true;
+            }
+
             // Show the requested step and manage its initial sub-section visibility
             switch (stepId) {
                 case 'step-1':
@@ -271,12 +266,20 @@
 
         /**
          * Resets the flow back to Step 1 and clears the input field.
+         * Optionally takes a boolean to force going back without a warning.
+         * @param {boolean} [force=false] - If true, goes back without prompt.
          */
-        function goBack() {
+        function goBack(force = false) {
+            if (isInProgress && !force) {
+                if (!confirm("Are you sure you want to abandon the password reset process? You will lose your progress.")) {
+                    return; // User clicked Cancel
+                }
+            }
             showStep('step-1');
             emailOrPhoneInput.value = '';
             currentUser = null; // Clear any stored user data
             clearOtpTimer(); // Clear timer if navigating back from OTP step
+            isInProgress = false; // Reset the flag
         }
 
         /**
@@ -395,7 +398,7 @@
 
                 const data = await response.json();
 
-                showStep('step-2');
+                showStep('step-2'); // Always move to step 2 to show either user found or not found
 
                 if (data.result === true && data.code === 200 && data.data) {
                     currentUser = data.data;
@@ -431,7 +434,7 @@
             } catch (error) {
                 console.error('Error finding account:', error);
                 showCustomAlert("An error occurred while trying to find your account. Please check your input and try again.");
-                showStep('step-1');
+                showStep('step-1'); // Go back to step 1 on a general error
             }
         });
 
@@ -454,7 +457,7 @@
 
                 if (!currentUser || !currentUser.email) {
                     showCustomAlert("Email recovery is not available for this account.");
-                    goBack();
+                    goBack(true); // Force goBack as it's an internal logic issue
                     return;
                 }
                 otpMessageElem.textContent = `An OTP has been sent to your registered email ${maskEmail(currentUser.email)}. Please enter it below to proceed.`;
@@ -468,7 +471,7 @@
             } else if (option === 'phone') {
                 if (!currentUser || !currentUser.phone) {
                     showCustomAlert("Phone recovery is not available for this account.");
-                    goBack();
+                    goBack(true); // Force goBack as it's an internal logic issue
                     return;
                 }
                 otpMessageElem.textContent = `An OTP has been sent to your registered phone ${maskPhone(currentUser.phone)}. Please enter it below to proceed.`;
@@ -480,16 +483,21 @@
                 otpSent = await triggerOtpSend(currentOtpType, currentOtpSendTo);
 
             } else if (option === 'login') {
+                // If user selects "Login with Password", redirect without warning.
+                // We mark isInProgress as false so beforeunload doesn't fire.
+                isInProgress = false;
                 window.location.href = '/login';
                 return; // Stop execution
             } else if (option === 'contact') {
                 otpMessageElem.textContent = "";
                 thankYouMessageDiv.classList.remove('hidden');
+                // For "Contact Authority", we consider the process completed for this path
+                isInProgress = false;
                 return; // Stop execution
             }
 
             if (!otpSent) {
-                goBack(); // If OTP failed to send, go back to step 1
+                goBack(true); // If OTP failed to send, go back to step 1 forcefully
             }
         });
 
@@ -517,7 +525,7 @@
             // Ensure currentOtpSendTo and currentOtpType are set from previous steps
             if (!currentOtpSendTo || !currentOtpType) {
                 showCustomAlert("OTP context missing. Please restart the process.");
-                goBack();
+                goBack(true); // Force goBack
                 return;
             }
 
@@ -581,7 +589,7 @@
 
             if (!currentUser || !currentUser.id) {
                 showCustomAlert("User information is missing. Please restart the password reset process.");
-                goBack();
+                goBack(true); // Force goBack
                 return;
             }
 
@@ -616,6 +624,7 @@
 
                 if (data.result === true) {
                     showCustomAlert("Your password has been successfully reset! You will now be redirected to the login page.");
+                    isInProgress = false; // Process is complete, no warning needed on redirect
                     setTimeout(() => window.location.href = '/landing-login', 2000);
                 } else {
                     showCustomAlert(data.message || "Failed to reset your password. Please try again.");
@@ -625,6 +634,35 @@
                 showCustomAlert("An error occurred during the password reset process. Please try again.");
             }
         });
+
+        // --- New Logic for Exit Warning ---
+
+        /**
+         * Event listener for the `beforeunload` event.
+         * Shows a confirmation dialog if the password reset process is in progress.
+         * @param {Event} e - The beforeunload event object.
+         */
+        window.addEventListener('beforeunload', function (e) {
+            if (isInProgress) {
+                // Most browsers now ignore the custom message and display a generic one.
+                // However, returning a string is still necessary to trigger the dialog.
+                const confirmationMessage = "Are you sure you want to leave? Your password reset progress will be lost.";
+                e.returnValue = confirmationMessage; // Standard for older browsers
+                return confirmationMessage; // For modern browsers
+            }
+        });
+
+        // Intercept clicks on the "Back to Home" link
+        backToHomeLink.addEventListener('click', function (e) {
+            if (isInProgress) {
+                e.preventDefault(); // Prevent default navigation
+                if (confirm("Are you sure you want to abandon the password reset process and go back to home? You will lose your progress.")) {
+                    isInProgress = false; // Allow navigation after confirmation
+                    window.location.href = e.target.href; // Proceed with navigation
+                }
+            }
+        });
+
 
         // Initialize the flow by showing the first step when the DOM is fully loaded
         document.addEventListener('DOMContentLoaded', () => {
